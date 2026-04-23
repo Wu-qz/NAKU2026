@@ -5,6 +5,10 @@
 #include <QKeyEvent>
 #include <QRect>
 #include <QPixmap>
+#include <QMediaPlayer>
+#include <QAudioOutput>
+#include <QUrl>
+#include <QDir>
 #include <cstdlib>
 #include <ctime>
 
@@ -20,7 +24,7 @@ public:
     const float DUCK_H = 44;
 
     const float BASE_JUMP = -7.0f;
-    const float MAX_JUMP  = -14.0f;
+    const float MAX_JUMP  = -12.0f;
     const float JUMP_INC = 0.7f;
     float currentJump = 0;
     bool isHoldingSpace = false;
@@ -29,7 +33,7 @@ public:
     float GAME_SPEED = 6.0f;
     const float MAX_SPEED_LIMIT = 28.0f;
 
-    float dinoX = 50;
+    float dinoX = 100;
     float dinoY;
     float dinoVelY = 0;
     bool isJumping = false;
@@ -45,18 +49,44 @@ public:
     QPixmap pixCactus;
     QPixmap pixBird;
 
+    QMediaPlayer *jumpSound;
+    QAudioOutput *jumpAudio;
+
+    QMediaPlayer *duckSound;
+    QAudioOutput *duckAudio;
+
+    QMediaPlayer *dieSound;
+    QAudioOutput *dieAudio;
+
     QTimer *timer;
 
     GameWidget(QWidget *parent = nullptr) : QWidget(parent) {
         setFixedSize(900, 300);
         setWindowTitle("凑企鹅跑酷");
         setFocusPolicy(Qt::StrongFocus);
-        dinoY = GROUND_Y - STAND_H;
+        dinoY = GROUND_Y - STAND_H - 2;
 
         pixDino.load("res/dino.png");
         pixDinoDuck.load("res/dino_duck.png");
         pixCactus.load("res/cactus.png");
         pixBird.load("res/bird.png");
+
+        jumpSound = new QMediaPlayer(this);
+        jumpAudio = new QAudioOutput(this);
+        jumpSound->setAudioOutput(jumpAudio);
+        jumpSound->setSource(QUrl::fromLocalFile(QDir::currentPath() + "/res/jump.wav"));
+
+        // 下蹲音效
+        duckSound = new QMediaPlayer(this);
+        duckAudio = new QAudioOutput(this);
+        duckSound->setAudioOutput(duckAudio);
+        duckSound->setSource(QUrl::fromLocalFile(QDir::currentPath() + "/res/duck.wav"));
+
+        // 死亡音效
+        dieSound = new QMediaPlayer(this);
+        dieAudio = new QAudioOutput(this);
+        dieSound->setAudioOutput(dieAudio);
+        dieSound->setSource(QUrl::fromLocalFile(QDir::currentPath() + "/res/die.wav"));
 
         srand(time(0));
         randomObstacle();
@@ -70,7 +100,7 @@ public:
         obsX = width() + rand() % 300 + 200;
         if (GAME_SPEED > 9 && rand() % 3 == 0) {
             obstacleType = 1;
-            obsY = GROUND_Y - 70;
+            obsY = GROUND_Y - (60 + rand() % 60);
         } else {
             obstacleType = 0;
             obsY = GROUND_Y - 70;
@@ -87,11 +117,19 @@ protected:
                 isJumping = true;
                 currentJump = BASE_JUMP;
                 dinoVelY = currentJump;
+
+                jumpSound->stop();
+                jumpSound->play();
             }
         }
 
         if (gameState == 1 && (e->key() == Qt::Key_Down || e->key() == Qt::Key_S)) {
-            isDucking = true;
+            if (!isDucking) {
+                isDucking = true;
+
+                duckSound->stop();
+                duckSound->play();
+            }
         }
 
         if (e->key() == Qt::Key_R && gameState == 2) {
@@ -128,14 +166,14 @@ protected:
 
         if (gameState == 0) {
             p.setFont(QFont("微软雅黑", 26));
-            p.drawText(rect(), Qt::AlignCenter, "你是谁啊\n空格键");
+            p.drawText(rect(), Qt::AlignCenter, "按空格键开始");
             return;
         }
 
         p.setFont(QFont("微软雅黑", 16));
         p.drawText(20, 30, "分数: " + QString::number(score * 100));
         p.drawText(20, 58, "速度: " + QString::number(GAME_SPEED, 'f', 1));
-        p.drawText(20, 86, "空格跳跃  ↓下蹲");
+        p.drawText(20, 86, "空格跳跃  ↓/S下蹲");
 
         if (gameState == 2) {
             p.setFont(QFont("微软雅黑", 32));
@@ -146,7 +184,7 @@ protected:
 private:
     void resetGame() {
         gameState = 0;
-        dinoY = GROUND_Y - STAND_H;
+        dinoY = GROUND_Y - STAND_H - 2;
         dinoVelY = 0;
         isJumping = false;
         isDucking = false;
@@ -170,8 +208,8 @@ private:
         if (isJumping) {
             dinoY += dinoVelY;
             dinoVelY += GRAVITY;
-            if (dinoY >= GROUND_Y - STAND_H) {
-                dinoY = GROUND_Y - STAND_H;
+            if (dinoY >= GROUND_Y - STAND_H - 2) {
+                dinoY = GROUND_Y - STAND_H - 2;
                 dinoVelY = 0;
                 isJumping = false;
                 isHoldingSpace = false;
@@ -196,6 +234,9 @@ private:
 
         if (dinoRect.intersects(obsRect)) {
             gameState = 2;
+
+            dieSound->stop();
+            dieSound->play();
         }
 
         update();
