@@ -46,7 +46,6 @@ public:
     float obsX = 900;
     float obsY;
 
-
     bool hasSecondObs = false;
     float obsX2;
     int obsType2;
@@ -62,10 +61,15 @@ public:
 
     QMediaPlayer *jumpSound;
     QAudioOutput *jumpAudio;
+
     QMediaPlayer *duckSound;
     QAudioOutput *duckAudio;
+
     QMediaPlayer *dieSound;
     QAudioOutput *dieAudio;
+
+    QMediaPlayer *guguSound;
+    QAudioOutput *guguAudio;
 
     QTimer *timer;
 
@@ -75,17 +79,14 @@ public:
         setFocusPolicy(Qt::StrongFocus);
         dinoY = GROUND_Y - STAND_H - 2;
 
-        // 加载图片
         pixDino.load("res/dino.png");
         pixDinoDuck.load("res/dino_duck.png");
         pixCactus.load("res/cactus.png");
         pixCactusSmall.load("res/cactus.png");
         pixBird.load("res/bird.png");
 
-        // 加载最高分
         loadHighScore();
 
-        // 音效初始化
         jumpSound = new QMediaPlayer(this);
         jumpAudio = new QAudioOutput(this);
         jumpSound->setAudioOutput(jumpAudio);
@@ -101,6 +102,18 @@ public:
         dieSound->setAudioOutput(dieAudio);
         dieSound->setSource(QUrl::fromLocalFile(QDir::currentPath() + "/res/die.wav"));
 
+        guguSound = new QMediaPlayer(this);
+        guguAudio = new QAudioOutput(this);
+        guguSound->setAudioOutput(guguAudio);
+        guguSound->setSource(QUrl::fromLocalFile(QDir::currentPath() + "/res/gugugaga.wav"));
+
+        connect(dieSound, &QMediaPlayer::playbackStateChanged, this, [=](QMediaPlayer::PlaybackState state) {
+            if (state == QMediaPlayer::StoppedState && gameState == 2) {
+                guguSound->stop();
+                guguSound->play();
+            }
+        });
+
         srand(time(0));
         randomObstacle();
 
@@ -109,7 +122,6 @@ public:
         connect(timer, &QTimer::timeout, this, &GameWidget::updateGame);
     }
 
-    // 读取最高分
     void loadHighScore() {
         QFile file("score.txt");
         if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -119,7 +131,6 @@ public:
         }
     }
 
-    // 保存最高分
     void saveHighScore() {
         QFile file("score.txt");
         if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
@@ -129,26 +140,23 @@ public:
         }
     }
 
-    // 生成障碍物
     void randomObstacle() {
         obsX = width() + rand() % 300 + 150;
         hasSecondObs = false;
 
-        // 随机类型
         int rnd = rand() % 4;
         if (GAME_SPEED > 9 && rand() % 3 == 0) {
             obstacleType = 1;
             obsY = GROUND_Y - (60 + rand() % 60);
         } else {
-            if(rnd == 0) { obstacleType = 0; obsY = GROUND_Y - 70; }
-            if(rnd == 1) { obstacleType = 2; obsY = GROUND_Y - 50; }
-            if(rnd == 2 || rnd == 3) { obstacleType = 0; obsY = GROUND_Y - 70; }
+            if (rnd == 0) { obstacleType = 0; obsY = GROUND_Y - 70; }
+            if (rnd == 1) { obstacleType = 2; obsY = GROUND_Y - 50; }
+            if (rnd == 2 || rnd == 3) { obstacleType = 0; obsY = GROUND_Y - 70; }
         }
 
-        // 30% 概率生成第二个紧贴障碍物
-        if(rand() % 100 < 30) {
+        if (rand() % 100 < 30) {
             hasSecondObs = true;
-            obsX2 = obsX + 45; // 紧贴间距
+            obsX2 = obsX + 45;
             obsType2 = rand() % 3;
         }
     }
@@ -203,17 +211,14 @@ protected:
         p.setPen(Qt::black);
         p.drawLine(0, GROUND_Y, width(), GROUND_Y);
 
-        // 绘制恐龙
         if (isDucking) {
             p.drawPixmap(dinoX, dinoY + (STAND_H - DUCK_H), DUCK_W, DUCK_H, pixDinoDuck);
         } else {
             p.drawPixmap(dinoX, dinoY, STAND_W, STAND_H, pixDino);
         }
 
-        // 绘制第一个障碍物
         drawOneObstacle(p, obstacleType, obsX, obsY);
-        // 绘制第二个紧贴障碍物
-        if(hasSecondObs) {
+        if (hasSecondObs) {
             drawOneObstacle(p, obsType2, obsX2, GROUND_Y - 70);
         }
 
@@ -223,7 +228,6 @@ protected:
             return;
         }
 
-        // 显示分数 + 最高分
         p.setFont(QFont("微软雅黑", 16));
         p.drawText(20, 30, "分数: " + QString::number(score * 100));
         p.drawText(20, 58, "最高分: " + QString::number(highScore));
@@ -236,7 +240,6 @@ protected:
         }
     }
 
-    // 绘制单个障碍物
     void drawOneObstacle(QPainter &p, int type, float x, float y) {
         if (type == 0) {
             p.drawPixmap((int)x, (int)y, 50, 70, pixCactus);
@@ -247,7 +250,6 @@ protected:
         }
     }
 
-    // 获取单个障碍物碰撞框
     QRectF getObstacleRect(int type, float x, float y) {
         if (type == 0) return QRectF(x, y, 50, 70);
         if (type == 1) return QRectF(x, y, 85, 40);
@@ -266,6 +268,10 @@ private:
         isHoldingSpace = false;
         GAME_SPEED = 6.0f;
         score = 0;
+
+        dieSound->stop();
+        guguSound->stop();
+
         randomObstacle();
     }
 
@@ -291,14 +297,12 @@ private:
             }
         }
 
-        // 障碍物移动
         obsX -= GAME_SPEED;
-        if(hasSecondObs) obsX2 -= GAME_SPEED;
+        if (hasSecondObs) obsX2 -= GAME_SPEED;
 
         if (obsX < -150) {
             score++;
-            // 更新最高分
-            if(score * 100 > highScore) {
+            if (score * 100 > highScore) {
                 highScore = score * 100;
                 saveHighScore();
             }
@@ -307,19 +311,16 @@ private:
             GAME_SPEED += remain * 0.028f;
         }
 
-        // 恐龙碰撞框
         QRectF dinoRect = isDucking
                               ? QRectF(dinoX, dinoY + (STAND_H - DUCK_H), DUCK_W, DUCK_H)
                               : QRectF(dinoX, dinoY, STAND_W, STAND_H);
 
-        // 检测第一个障碍物碰撞
         QRectF obsRect = getObstacleRect(obstacleType, obsX, obsY);
         bool hit = dinoRect.intersects(obsRect);
 
-        // 检测第二个障碍物碰撞
-        if(hasSecondObs) {
+        if (hasSecondObs) {
             QRectF obsRect2 = getObstacleRect(obsType2, obsX2, GROUND_Y - 70);
-            if(dinoRect.intersects(obsRect2)) hit = true;
+            if (dinoRect.intersects(obsRect2)) hit = true;
         }
 
         if (hit) {
